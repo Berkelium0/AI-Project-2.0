@@ -21,7 +21,6 @@ import time
 
 
 def agent_function(request_dict):
-    # TODO: Implement this function in a better way
     print('I got the following request:')
     print(request_dict)
 
