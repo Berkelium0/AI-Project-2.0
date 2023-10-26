@@ -39,17 +39,119 @@ def agent_function(request_dict):
     ]
 
     current_cell = request_dict['observations']["current-cell"]
-
+    if current_cell == "B":
+        current_cell = "C"
+    num_of_cells = 0
     for x, line in enumerate(cave_map, start=0):
         for y, cell in enumerate(line, start=0):
             if cell == current_cell:
                 action_point = check(x, y, cave_map, action_point)
+                num_of_cells += 1
 
-    print(cave_map, action_point)
-    return {"actions": ["GO " + action_list[0][action_point.index(max(action_point))],
-                        "GO " + action_list[1][action_point.index(max(action_point))]], "expected-time": 1.5}
+    actions = []
+    for i in range(2):
+        actions.append(action_list[i][action_point.index(max(action_point))])
+
+    eta = 0
+    p = 1 / num_of_cells
+    for x, line in enumerate(cave_map, start=0):
+        for y, cell in enumerate(line, start=0):
+            if cell == current_cell:
+                eta += p * expected_time(x, y, cave_map, actions)
+
+    return {"actions": ["GO " + actions[0],
+                        "GO " + actions[1]], "expected-time": eta}
 
 
+def expected_time(x, y, cm, act, step=0, total=0):
+    cant_move = False
+    if act[step] == "north":
+        if x != 0:
+            if (cm[x - 1][y]) == "W":
+                if step == 0:
+                    total += 0.5
+                else:
+                    total += 1
+            elif step == 0:
+                total += 0.5
+                total = expected_time(x - 1, y, cm, act, step + 1, total)
+            else:
+                total = 2
+        else:
+            cant_move = True
+    elif act[step] == "east":
+        if y != 4:
+            if (cm[x][y + 1]) == "W":
+                if step == 0:
+                    total += 0.5
+                else:
+                    total += 1
+            elif step == 0:
+                total += 0.5
+                total = expected_time(x, y + 1, cm, act, step + 1, total)
+            else:
+                total = 2
+        else:
+            cant_move = True
+    elif act[step] == "south":
+        if x != 4:
+            if (cm[x + 1][y]) == "W":
+                if step == 0:
+                    total += 0.5
+                else:
+                    total += 1
+            elif step == 0:
+                total += 0.5
+                total = expected_time(x + 1, y, cm, act, step + 1, total)
+            else:
+                total = 2
+        else:
+            cant_move = True
+    elif act[step] == "west":
+        if y != 0:
+            if (cm[x][y - 1]) == "W":
+                if step == 0:
+                    total += 0.5
+                else:
+                    total += 1
+            elif step == 0:
+                total += 0.5
+                total = expected_time(x, y - 1, cm, act, step + 1, total)
+            else:
+                total = 2
+        else:
+            cant_move = True
+    if cant_move:
+        return 2
+    else:
+        return total
+
+
+# def check(x, y, cm, ap, step=0):
+#     # hit_flag = False
+#     if step > 1:
+#         return ap
+#     if x != 0:
+#         if (cm[x - 1][y]) == "W":
+#             ap[step][0] += 1
+#         else:
+#             ap = check(x - 1, y, cm, ap, step + 1)
+#     if y != 4:
+#         if (cm[x][y + 1]) == "W":
+#             ap[step][1] += 1
+#         else:
+#             ap = check(x, y + 1, cm, ap, step + 1)
+#     if x != 4:
+#         if (cm[x + 1][y]) == "W":
+#             ap[step][2] += 1
+#         else:
+#             ap = check(x + 1, y, cm, ap, step + 1)
+#     if y != 0:
+#         if (cm[x][y - 1]) == "W":
+#             ap[step][3] += 1
+#         else:
+#             ap = check(x, y - 1, cm, ap, step + 1)
+#     return ap
 def check(x, y, cm, ap, step=0):
     # hit_flag = False
     if step > 1:
@@ -58,22 +160,30 @@ def check(x, y, cm, ap, step=0):
         if (cm[x - 1][y]) == "W":
             ap[step][0] += 1
         else:
-            check(x - 1, y, cm, ap, step + 1)
+            temp_ap = check(x - 1, y, cm, ap, step + 1)
+            if temp_ap != ap:
+                ap[step][0] += 0.5
     if y != 4:
         if (cm[x][y + 1]) == "W":
             ap[step][1] += 1
         else:
-            check(x, y + 1, cm, ap, step + 1)
+            temp_ap = check(x, y + 1, cm, ap, step + 1)
+            if temp_ap != ap:
+                ap[step][1] += 0.5
     if x != 4:
         if (cm[x + 1][y]) == "W":
             ap[step][2] += 1
         else:
-            check(x + 1, y, cm, ap, step + 1)
+            temp_ap = check(x + 1, y, cm, ap, step + 1)
+            if temp_ap != ap:
+                ap[step][2] += 0.5
     if y != 0:
         if (cm[x][y - 1]) == "W":
             ap[step][3] += 1
         else:
-            check(x, y - 1, cm, ap, step + 1)
+            temp_ap = check(x, y - 1, cm, ap, step + 1)
+            if temp_ap != ap:
+                ap[step][3] += 0.5
     return ap
 
 
