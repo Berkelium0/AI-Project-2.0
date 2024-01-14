@@ -22,11 +22,16 @@ import time
 
 from numpy import unravel_index
 
+MAX_STEP_COUNT = 1
+MAX_TIME = 0
 
 
 def agent_function(request_dict):
+    global MAX_TIME
     print('I got the following request:')
     print(request_dict)
+
+    MAX_TIME = request_dict['max-time']
 
     temp_map = request_dict['map'].split('\n')
     cave_map = []
@@ -45,10 +50,12 @@ def agent_function(request_dict):
         [0, 0, 0, 0],
         [0, 0, 0, 0]
     ]
-
+    boots = False
     current_cell = request_dict['observations']["current-cell"]
     if current_cell == "B":
         current_cell = "C"
+    if current_cell == "S":
+        boots = True
     num_of_cells = 0
     for x, line in enumerate(cave_map, start=0):
         for y, cell in enumerate(line, start=0):
@@ -68,74 +75,10 @@ def agent_function(request_dict):
     for x, line in enumerate(cave_map, start=0):
         for y, cell in enumerate(line, start=0):
             if cell == current_cell:
-                eta += p * expected_time(x, y, cave_map, actions)
+                eta += p * expected_time(x, y, cave_map, actions, boots)
     print(eta)
     return {"actions": ["GO " + actions[0],
                         "GO " + actions[1]], "expected-time": eta}
-
-
-def expected_time(x, y, cm, act, step=0, total=0):
-    cant_move = False
-    if act[step] == "north":
-        if x != 0:
-            if (cm[x - 1][y]) == "W":
-                if step == 0:
-                    total += 0.5
-                else:
-                    total += 1
-            elif step == 0:
-                total += 0.5
-                total = expected_time(x - 1, y, cm, act, step + 1, total)
-            else:
-                total = 2
-        else:
-            cant_move = True
-    elif act[step] == "east":
-        if y != 4:
-            if (cm[x][y + 1]) == "W":
-                if step == 0:
-                    total += 0.5
-                else:
-                    total += 1
-            elif step == 0:
-                total += 0.5
-                total = expected_time(x, y + 1, cm, act, step + 1, total)
-            else:
-                total = 2
-        else:
-            cant_move = True
-    elif act[step] == "south":
-        if x != 4:
-            if (cm[x + 1][y]) == "W":
-                if step == 0:
-                    total += 0.5
-                else:
-                    total += 1
-            elif step == 0:
-                total += 0.5
-                total = expected_time(x + 1, y, cm, act, step + 1, total)
-            else:
-                total = 2
-        else:
-            cant_move = True
-    elif act[step] == "west":
-        if y != 0:
-            if (cm[x][y - 1]) == "W":
-                if step == 0:
-                    total += 0.5
-                else:
-                    total += 1
-            elif step == 0:
-                total += 0.5
-                total = expected_time(x, y - 1, cm, act, step + 1, total)
-            else:
-                total = 2
-        else:
-            cant_move = True
-    if cant_move:
-        return 2
-    else:
-        return total
 
 
 # def check(x, y, cm, ap, step=0):
@@ -169,28 +112,28 @@ def check(x, y, cm, ap, step=0):
         return ap
     if x != 0:
         if (cm[x - 1][y]) == "W":
-            ap[0] = [x+1 for x in ap[0]]
+            ap[0] = [x + 1 for x in ap[0]]
         else:
             temp_ap = check(x - 1, y, cm, ap, step + 1)
             if temp_ap != ap:
                 ap[0][0] += 0.5
     if y != 4:
         if (cm[x][y + 1]) == "W":
-            ap[1] = [x+1 for x in ap[1]]
+            ap[1] = [x + 1 for x in ap[1]]
         else:
             temp_ap = check(x, y + 1, cm, ap, step + 1)
             if temp_ap != ap:
                 ap[1][1] += 0.5
     if x != 4:
         if (cm[x + 1][y]) == "W":
-            ap[2] = [x+1 for x in ap[2]]
+            ap[2] = [x + 1 for x in ap[2]]
         else:
             temp_ap = check(x + 1, y, cm, ap, step + 1)
             if temp_ap != ap:
                 ap[2][2] += 0.5
     if y != 0:
         if (cm[x][y - 1]) == "W":
-            ap[3] = [x+1 for x in ap[3]]
+            ap[3] = [x + 1 for x in ap[3]]
         else:
             temp_ap = check(x, y - 1, cm, ap, step + 1)
             if temp_ap != ap:
@@ -198,10 +141,119 @@ def check(x, y, cm, ap, step=0):
     return ap
 
 
+def expected_time(x, y, cm, act, boots, step=0, total=0):
+    global MAX_TIME
+    if cm[x][y] == "S":
+        in_swamp = True
+    else:
+        in_swamp = False
+
+    cant_move = False
+    if act[step] == "north":
+        if x != 0:
+            if (cm[x - 1][y]) == "W":
+                if in_swamp:
+                    if step == 0:
+                        total += 1
+                    else:
+                        total += 2
+                else:
+                    if step == 0:
+                        total += 0.5
+                    else:
+                        total += 1
+            elif step == 0:
+                if in_swamp:
+                    total += 1
+                else:
+                    total += 0.5
+
+                total = expected_time(x - 1, y, cm, act, boots, step + 1, total)
+            else:
+                total = MAX_TIME
+        else:
+            cant_move = True
+    elif act[step] == "east":
+        if y != 4:
+            if (cm[x][y + 1]) == "W":
+                if in_swamp:
+                    if step == 0:
+                        total += 1
+                    else:
+                        total += 2
+                else:
+                    if step == 0:
+                        total += 0.5
+                    else:
+                        total += 1
+            elif step == 0:
+                if in_swamp:
+                    total += 1
+                else:
+                    total += 0.5
+                total = expected_time(x, y + 1, cm, act, boots, step + 1, total)
+            else:
+                total = MAX_TIME
+        else:
+            cant_move = True
+    elif act[step] == "south":
+        if x != 4:
+            if (cm[x + 1][y]) == "W":
+                if in_swamp:
+                    if step == 0:
+                        total += 1
+                    else:
+                        total += 2
+                else:
+                    if step == 0:
+                        total += 0.5
+                    else:
+                        total += 1
+            elif step == 0:
+                if in_swamp:
+                    total += 1
+                else:
+                    total += 0.5
+                total = expected_time(x + 1, y, cm, act, boots, step + 1, total)
+            else:
+                total = MAX_TIME
+        else:
+            cant_move = True
+    elif act[step] == "west":
+        if y != 0:
+            if (cm[x][y - 1]) == "W":
+                if in_swamp:
+                    if step == 0:
+                        total += 1
+                    else:
+                        total += 2
+                else:
+                    if step == 0:
+                        total += 0.5
+                    else:
+                        total += 1
+            elif step == 0:
+                if in_swamp:
+                    total += 1
+                else:
+                    total += 0.5
+                total = expected_time(x, y - 1, cm, act, boots, step + 1, total)
+            else:
+                total = MAX_TIME
+        else:
+            cant_move = True
+    if cant_move:
+        return MAX_TIME
+    elif total > MAX_TIME:
+        return MAX_TIME
+    else:
+        return total
+
+
 def run(action_function, single_request=False):
     logger = logging.getLogger(__name__)
 
-    with open("env-1.json", 'r') as fp:
+    with open("env-2.json", 'r') as fp:
         config = json.load(fp)
 
     logger.info(f'Running agent {config["agent"]} on environment {config["env"]}')
