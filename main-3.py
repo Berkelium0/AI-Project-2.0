@@ -22,9 +22,8 @@ import time
 
 from numpy import unravel_index
 
-MAX_STEP_COUNT = 1
+MAX_STEP_COUNT = 5
 MAX_TIME = 0
-
 
 def agent_function(request_dict):
     global MAX_TIME
@@ -44,6 +43,10 @@ def agent_function(request_dict):
         ['sn', 'se', 'ss', 'sw'],
         ['wn', 'we', 'ws', 'ww']
     ]
+
+    # TODO: Create dynamic action point arrays where the complexity is as deep as the MAX_STEP_COUNT
+    #  (0 is action_point[], 1 is action_point[][] ...etc)
+    #  do it once and save it as a library to stop generating the same thing everytime?
     action_point = [
         [0, 0, 0, 0],
         [0, 0, 0, 0],
@@ -57,6 +60,9 @@ def agent_function(request_dict):
     if current_cell == "S":
         boots = True
     num_of_cells = 0
+
+    # TODO: dynamic step count -> try from 1 action to MAX_STEP_COUNT, compare times use the shortest timed one.
+
     for x, line in enumerate(cave_map, start=0):
         for y, cell in enumerate(line, start=0):
             if cell == current_cell:
@@ -81,31 +87,7 @@ def agent_function(request_dict):
                         "GO " + actions[1]], "expected-time": eta}
 
 
-# def check(x, y, cm, ap, step=0):
-#     # hit_flag = False
-#     if step > 1:
-#         return ap
-#     if x != 0:
-#         if (cm[x - 1][y]) == "W":
-#             ap[step][0] += 1
-#         else:
-#             ap = check(x - 1, y, cm, ap, step + 1)
-#     if y != 4:
-#         if (cm[x][y + 1]) == "W":
-#             ap[step][1] += 1
-#         else:
-#             ap = check(x, y + 1, cm, ap, step + 1)
-#     if x != 4:
-#         if (cm[x + 1][y]) == "W":
-#             ap[step][2] += 1
-#         else:
-#             ap = check(x + 1, y, cm, ap, step + 1)
-#     if y != 0:
-#         if (cm[x][y - 1]) == "W":
-#             ap[step][3] += 1
-#         else:
-#             ap = check(x, y - 1, cm, ap, step + 1)
-#     return ap
+
 def check(x, y, cm, ap, step=0):
     # hit_flag = False
     if step > 1:
@@ -140,7 +122,8 @@ def check(x, y, cm, ap, step=0):
                 ap[3][3] += 0.5
     return ap
 
-
+# TODO: Expected time -> Wear boots, check if next tile W or S take off boots depending on that
+# TODO: Need to make expected time more modular for steps count higher than 1
 def expected_time(x, y, cm, act, boots, step=0, total=0):
     global MAX_TIME
     if cm[x][y] == "S":
