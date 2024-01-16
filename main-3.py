@@ -25,6 +25,20 @@ from numpy import unravel_index
 MAX_STEP_COUNT = 5
 MAX_TIME = 0
 
+# Create Action Point Arrays
+# f = open("arrays.json", "w")
+# f.write("{")
+# array = [0]
+# for i in range(1, 7):
+#     array = array * 4
+#     f.write(f'"{i}" : "{array}",')
+#     array = [array]
+# f.write("}")
+# f.close()
+a = open("arrays.json", "r")
+action_point_arrays = json.load(a)
+
+
 def agent_function(request_dict):
     global MAX_TIME
     print('I got the following request:')
@@ -44,15 +58,6 @@ def agent_function(request_dict):
         ['wn', 'we', 'ws', 'ww']
     ]
 
-    # TODO: Create dynamic action point arrays where the complexity is as deep as the MAX_STEP_COUNT
-    #  (0 is action_point[], 1 is action_point[][] ...etc)
-    #  do it once and save it as a library to stop generating the same thing everytime?
-    action_point = [
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-        [0, 0, 0, 0]
-    ]
     boots = False
     current_cell = request_dict['observations']["current-cell"]
     if current_cell == "B":
@@ -63,30 +68,57 @@ def agent_function(request_dict):
 
     # TODO: dynamic step count -> try from 1 action to MAX_STEP_COUNT, compare times use the shortest timed one.
 
-    for x, line in enumerate(cave_map, start=0):
-        for y, cell in enumerate(line, start=0):
-            if cell == current_cell:
-                action_point = check(x, y, cave_map, action_point)
-                num_of_cells += 1
+    steps_and_results = {
+       # "1": [],
+        "2": [],
+        #"3": [],
+        #"4": [],
+        #"5": [],
+        #"6": [],
+    }
 
-    actions = []
-    directions = ["north", "east", "south", "west"]
-    a = np.array(action_point)
-    action_indexes = list(unravel_index(a.argmax(), a.shape))
-    for i in range(2):
-        actions.append(directions[action_indexes[i]])
-
+    action_commands = []
     eta = 0
-    p = 1 / num_of_cells
-    for x, line in enumerate(cave_map, start=0):
-        for y, cell in enumerate(line, start=0):
-            if cell == current_cell:
-                eta += p * expected_time(x, y, cave_map, actions, boots)
-    print(eta)
-    return {"actions": ["GO " + actions[0],
-                        "GO " + actions[1]], "expected-time": eta}
+    for key in steps_and_results:
+        key = int(key)
+        action_point = action_point_arrays[f"{key}"]
+
+        for x, line in enumerate(cave_map, start=0):
+            for y, cell in enumerate(line, start=0):
+                if cell == current_cell:
+                    action_point = check(x, y, cave_map, action_point)
+                    num_of_cells += 1
+
+        actions = []
+        directions = ["north", "east", "south", "west"]
+        a = np.array(action_point)
+        action_indexes = list(unravel_index(a.argmax(), a.shape))
+        for i in range(key):
+            actions.append(directions[action_indexes[i]])
+
+        p = 1 / num_of_cells
+        for x, line in enumerate(cave_map, start=0):
+            for y, cell in enumerate(line, start=0):
+                if cell == current_cell:
+                    eta += p * expected_time(x, y, cave_map, actions, boots)
+        print(eta)
+
+        action_commands = [f"GO {action}" for action in actions]
+        steps_and_results[f"{key}"] = [action_commands, eta]
+
+    min_eta = float('inf')
+    min_key = None
+
+    for key, values in steps_and_results.items():
+        act, eta = values
+        if eta < min_eta:
+            min_eta = eta
+            min_key = key
+
+    return {"actions": steps_and_results[min_key][0], "expected-time": steps_and_results[min_key][1]}
 
 
+# TODO: Need to make expected time more modular for steps count higher than 1
 
 def check(x, y, cm, ap, step=0):
     # hit_flag = False
@@ -121,6 +153,7 @@ def check(x, y, cm, ap, step=0):
             if temp_ap != ap:
                 ap[3][3] += 0.5
     return ap
+
 
 # TODO: Expected time -> Wear boots, check if next tile W or S take off boots depending on that
 # TODO: Need to make expected time more modular for steps count higher than 1
@@ -280,3 +313,5 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
     run(agent_function, single_request=False)
+
+a.close()
