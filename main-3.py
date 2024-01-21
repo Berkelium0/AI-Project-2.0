@@ -16,254 +16,254 @@ import itertools
 import json
 import logging
 
-import numpy as np
 import requests
 import time
 
-from numpy import unravel_index
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 
-MAX_STEP_COUNT = 5
+import heapq
+
 MAX_TIME = 0
 
-# Create Action Point Arrays
-# f = open("arrays.json", "w")
-# f.write("{")
-# array = [0]
-# for i in range(1, 7):
-#     array = array * 4
-#     f.write(f'"{i}" : "{array}",')
-#     array = [array]
-# f.write("}")
-# f.close()
-a = open("arrays.json", "r")
-action_point_arrays = json.load(a)
+
+class Node:
+    def __init__(self, row, col, cell_type):
+        self.row = row
+        self.col = col
+        self.cell_type = cell_type
+        self.wearing_boots = False
+        self.g = 0
+        self.h = 0
+        self.f = 0
+        self.parent = None
+        self.first_step = False  # flag to track if this is the first step
+
+    def update_first_step(self):
+        if not self.first_step:
+            self.first_step = True
+        else:
+            self.first_step = False
+
+    def __lt__(self, other):
+        # Implement the less-than comparison for heapq
+        return self.f < other.f
+
+
+def heuristic(node, goal):
+    # Implementing Manhattan distance heuristic
+    return abs(node.row - goal.row) + abs(node.col - goal.col)
+
+
+def get_neighbors(node, node_map):
+    neighbors = []
+    rows, cols = len(node_map), len(node_map[0])
+
+    # Define possible movements (up, down, left, right)
+    movements = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+
+    for dr, dc in movements:
+        new_row, new_col = node.row + dr, node.col + dc
+
+        if 0 <= new_row < rows and 0 <= new_col < cols:
+            neighbors.append(node_map[new_row][new_col])
+
+    return neighbors
+
+
+def calculate_cost(node1, node2):
+    cost = 0
+    if node1.cell_type != 'S':
+        cost += 1
+    else:
+        # Additional cost for moving within a swamp
+        cost += 2
+
+    if node1.first_step:
+        # Adjust cost based on wumpus starting location
+        cost = cost / 2
+        node1.update_first_step()
+
+    if node1.cell_type == 'S' and node2.cell_type != 'S':
+        # Additional cost for moving from a swamp to a non-swamp
+        cost += 1
+    elif node1.cell_type != 'S' and node2.cell_type == 'S':
+        # Additional cost for moving from a non-swamp to a swamp
+        cost += 1
+
+    return cost
+
+
+def reconstruct_path(start, goal):
+    path = []
+    current = goal
+
+    while current and current != start:
+        path.insert(0, (current.row, current.col))
+        current = current.parent
+
+    if not path:
+        # No valid path found
+        return None
+
+    return path
+
+
+
+def astar(start, goal, node_map, max_cost):
+    start.update_first_step()
+    open_set = [(start.f, start)]
+    closed_set = set()
+
+    while open_set:
+        current_f, current_node = heapq.heappop(open_set)
+        closed_set.add(current_node)
+
+        if current_node == goal:
+            return reconstruct_path(start, goal)
+
+        if current_node.g > max_cost:
+            # Stop if the cost exceeds the maximum allowed
+            return None
+
+        for neighbor in get_neighbors(current_node, node_map):
+            if neighbor in closed_set:
+                continue
+
+            tentative_g = current_node.g + calculate_cost(current_node, neighbor)
+            if neighbor.g == 0 or tentative_g > neighbor.g:
+                neighbor.parent = current_node
+                neighbor.g = tentative_g
+                neighbor.h = heuristic(neighbor, goal)
+                neighbor.f = neighbor.g + neighbor.h
+
+                if neighbor not in open_set:
+                    heapq.heappush(open_set, (neighbor.f, neighbor))
+
+    return None
+
+
+def initialize_node_map(map_representation):
+    node_map = []
+
+    for row, row_data in enumerate(map_representation):
+        node_row = []
+        for col, cell_type in enumerate(row_data):
+            node = Node(row, col, cell_type)
+            node_row.append(node)
+        node_map.append(node_row)
+
+    return node_map
 
 
 def agent_function(request_dict):
     global MAX_TIME
-    print('I got the following request:')
-    print(request_dict)
-
-    MAX_TIME = request_dict['max-time']
+    MAX_TIME = request_dict["max-time"]
 
     temp_map = request_dict['map'].split('\n')
-    cave_map = []
+    map_representation = []
+
     for x in temp_map:
-        cave_map.append([cell for cell in x])
+        map_representation.append([cell for cell in x])
 
-    action_list = [
-        ['nn', 'ne', 'ns', 'nw'],
-        ['en', 'ee', 'es', 'ew'],
-        ['sn', 'se', 'ss', 'sw'],
-        ['wn', 'we', 'ws', 'ww']
-    ]
+    node_map = initialize_node_map(map_representation)
 
-    boots = False
-    current_cell = request_dict['observations']["current-cell"]
-    if current_cell == "B":
-        current_cell = "C"
-    if current_cell == "S":
-        boots = True
-    num_of_cells = 0
+    # Identify entrance and exit points
+    entrances = []
+    exits = []
 
-    # TODO: dynamic step count -> try from 1 action to MAX_STEP_COUNT, compare times use the shortest timed one.
+    for row in node_map:
+        for node in row:
+            if node.cell_type == request_dict['observations']['current-cell']:
+                entrances.append(node)
+            elif node.cell_type == 'W':
+                exits.append(node)
 
-    steps_and_results = {
-       # "1": [],
-        "2": [],
-        #"3": [],
-        #"4": [],
-        #"5": [],
-        #"6": [],
-    }
+    # Find the nearest exit for each entrance
+    entrance_exit_pairs = []
+    for entrance in entrances:
+        nearest_exit = min(exits, key=lambda exit_point: heuristic(entrance, exit_point))
+        entrance_exit_pairs.append((entrance, nearest_exit))
+    total_costs = {}
+    for entrance, exit_point in entrance_exit_pairs:
+        path = astar(entrance, exit_point, node_map, MAX_TIME)
+        if path:
+            # Update the total cost for this entrance-exit pair
+            total_cost = calculate_total_cost(path, entrance, exit_point, node_map)
+            total_costs[tuple(path)] = total_cost  # Convert path to tuple
 
-    action_commands = []
-    eta = 0
-    for key in steps_and_results:
-        key = int(key)
-        action_point = action_point_arrays[f"{key}"]
+    # Choose the best moveset based on total costs
+    best_moveset_path = min(total_costs, key=total_costs.get, default=None)
 
-        for x, line in enumerate(cave_map, start=0):
-            for y, cell in enumerate(line, start=0):
-                if cell == current_cell:
-                    action_point = check(x, y, cave_map, action_point)
-                    num_of_cells += 1
-
+    if best_moveset_path:
+        actions = ["GO " + get_direction(best_moveset_path[i], best_moveset_path[i + 1]) for i in
+                   range(len(best_moveset_path) - 1)]
+        expected_time = total_costs[best_moveset_path]  # Adjust this based on your actual calculation
+    else:
+        # No valid moveset found
         actions = []
-        directions = ["north", "east", "south", "west"]
-        a = np.array(action_point)
-        action_indexes = list(unravel_index(a.argmax(), a.shape))
-        for i in range(key):
-            actions.append(directions[action_indexes[i]])
+        expected_time = 0
 
-        p = 1 / num_of_cells
-        for x, line in enumerate(cave_map, start=0):
-            for y, cell in enumerate(line, start=0):
-                if cell == current_cell:
-                    eta += p * expected_time(x, y, cave_map, actions, boots)
-        print(eta)
-
-        action_commands = [f"GO {action}" for action in actions]
-        steps_and_results[f"{key}"] = [action_commands, eta]
-
-    min_eta = float('inf')
-    min_key = None
-
-    for key, values in steps_and_results.items():
-        act, eta = values
-        if eta < min_eta:
-            min_eta = eta
-            min_key = key
-
-    return {"actions": steps_and_results[min_key][0], "expected-time": steps_and_results[min_key][1]}
+    response_dict = {
+        "actions": actions,
+        "expected-time": expected_time
+    }
+    print(response_dict)
+    return response_dict
 
 
-# TODO: Need to make expected time more modular for steps count higher than 1
-
-def check(x, y, cm, ap, step=0):
-    # hit_flag = False
-    if step > 1:
-        return ap
-    if x != 0:
-        if (cm[x - 1][y]) == "W":
-            ap[0] = [x + 1 for x in ap[0]]
-        else:
-            temp_ap = check(x - 1, y, cm, ap, step + 1)
-            if temp_ap != ap:
-                ap[0][0] += 0.5
-    if y != 4:
-        if (cm[x][y + 1]) == "W":
-            ap[1] = [x + 1 for x in ap[1]]
-        else:
-            temp_ap = check(x, y + 1, cm, ap, step + 1)
-            if temp_ap != ap:
-                ap[1][1] += 0.5
-    if x != 4:
-        if (cm[x + 1][y]) == "W":
-            ap[2] = [x + 1 for x in ap[2]]
-        else:
-            temp_ap = check(x + 1, y, cm, ap, step + 1)
-            if temp_ap != ap:
-                ap[2][2] += 0.5
-    if y != 0:
-        if (cm[x][y - 1]) == "W":
-            ap[3] = [x + 1 for x in ap[3]]
-        else:
-            temp_ap = check(x, y - 1, cm, ap, step + 1)
-            if temp_ap != ap:
-                ap[3][3] += 0.5
-    return ap
+def get_direction(current_pos, next_pos):
+    # Helper function to determine the direction from current_pos to next_pos
+    if current_pos[0] < next_pos[0]:
+        return "south"
+    elif current_pos[0] > next_pos[0]:
+        return "north"
+    elif current_pos[1] < next_pos[1]:
+        return "east"
+    elif current_pos[1] > next_pos[1]:
+        return "west"
 
 
-# TODO: Expected time -> Wear boots, check if next tile W or S take off boots depending on that
-# TODO: Need to make expected time more modular for steps count higher than 1
-def expected_time(x, y, cm, act, boots, step=0, total=0):
-    global MAX_TIME
-    if cm[x][y] == "S":
-        in_swamp = True
-    else:
-        in_swamp = False
+def calculate_total_cost(path, entrance, exit_point, node_map):
+    # Calculate the total cost for the given path
+    total_cost = 0
+    start_location = (entrance.row, entrance.col)
 
-    cant_move = False
-    if act[step] == "north":
-        if x != 0:
-            if (cm[x - 1][y]) == "W":
-                if in_swamp:
-                    if step == 0:
-                        total += 1
-                    else:
-                        total += 2
-                else:
-                    if step == 0:
-                        total += 0.5
-                    else:
-                        total += 1
-            elif step == 0:
-                if in_swamp:
-                    total += 1
-                else:
-                    total += 0.5
+    for i in range(len(path) - 1):
+        current_node = node_map[path[i][0]][path[i][1]]
+        next_node = node_map[path[i + 1][0]][path[i + 1][1]]
+        total_cost += calculate_cost(current_node, next_node)
 
-                total = expected_time(x - 1, y, cm, act, boots, step + 1, total)
-            else:
-                total = MAX_TIME
-        else:
-            cant_move = True
-    elif act[step] == "east":
-        if y != 4:
-            if (cm[x][y + 1]) == "W":
-                if in_swamp:
-                    if step == 0:
-                        total += 1
-                    else:
-                        total += 2
-                else:
-                    if step == 0:
-                        total += 0.5
-                    else:
-                        total += 1
-            elif step == 0:
-                if in_swamp:
-                    total += 1
-                else:
-                    total += 0.5
-                total = expected_time(x, y + 1, cm, act, boots, step + 1, total)
-            else:
-                total = MAX_TIME
-        else:
-            cant_move = True
-    elif act[step] == "south":
-        if x != 4:
-            if (cm[x + 1][y]) == "W":
-                if in_swamp:
-                    if step == 0:
-                        total += 1
-                    else:
-                        total += 2
-                else:
-                    if step == 0:
-                        total += 0.5
-                    else:
-                        total += 1
-            elif step == 0:
-                if in_swamp:
-                    total += 1
-                else:
-                    total += 0.5
-                total = expected_time(x + 1, y, cm, act, boots, step + 1, total)
-            else:
-                total = MAX_TIME
-        else:
-            cant_move = True
-    elif act[step] == "west":
-        if y != 0:
-            if (cm[x][y - 1]) == "W":
-                if in_swamp:
-                    if step == 0:
-                        total += 1
-                    else:
-                        total += 2
-                else:
-                    if step == 0:
-                        total += 0.5
-                    else:
-                        total += 1
-            elif step == 0:
-                if in_swamp:
-                    total += 1
-                else:
-                    total += 0.5
-                total = expected_time(x, y - 1, cm, act, boots, step + 1, total)
-            else:
-                total = MAX_TIME
-        else:
-            cant_move = True
-    if cant_move:
-        return MAX_TIME
-    elif total > MAX_TIME:
-        return MAX_TIME
-    else:
-        return total
+    return total_cost
+
+
+def visualize_map(node_map):
+    # Create a colormap for different cell types
+    cmap = mcolors.ListedColormap(['green', 'brown', 'darkgreen', 'blue', 'red'])
+    bounds = [0, 1, 2, 3, 4, 5]
+    norm = mcolors.BoundaryNorm(bounds, cmap.N)
+
+    # Create a figure and axis
+    fig, ax = plt.subplots()
+
+    # Plot each cell with its color based on cell type
+    for row in node_map:
+        for node in row:
+            color = cmap(norm(bounds.index(['M', 'B', 'C', 'S', 'W'].index(node.cell_type))))
+            rect = plt.Rectangle((node.col, node.row), 1, 1, facecolor=color, edgecolor='black')
+            ax.add_patch(rect)
+
+            # Annotate cell with cell type
+            ax.text(node.col + 0.5, node.row + 0.5, node.cell_type, ha='center', va='center', color='white')
+
+    # Set axis limits
+    ax.set_xlim(0, len(node_map[0]))
+    ax.set_ylim(0, len(node_map))
+
+    # Invert y-axis to match the grid representation
+    ax.invert_yaxis()
+
+    plt.show()
 
 
 def run(action_function, single_request=False):
@@ -313,5 +313,3 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
     run(agent_function, single_request=False)
-
-a.close()
