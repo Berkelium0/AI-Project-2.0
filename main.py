@@ -5,8 +5,6 @@ import math
 
 import requests
 import time
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 import heapq
 
 MAX_TIME = 2
@@ -188,7 +186,7 @@ def test_paths(entrance_points, directions_list, node_map, max_cost):
         total_costs.append(cost)
 
     # Calculate the average cost for each set of directions
-    total_costs = capped_list = [min(value, max_cost) for value in total_costs]
+    total_costs = [min(value, max_cost) for value in total_costs]
     # print("total_costs", total_costs)
     average_costs = sum(total_costs) / len(total_costs)
     return average_costs
@@ -220,7 +218,7 @@ def agent_function(request_dict):
 
     entrance_exit_pairs = []
     for entrance in entrances:
-        nearest_exit = min(exits, key=lambda exit_point: heuristic(entrance, exit_point))
+        nearest_exit = min(exits, key=lambda exit_p: heuristic(entrance, exit_p))
         entrance_exit_pairs.append((entrance, nearest_exit))
 
     paths = []
@@ -269,7 +267,6 @@ def get_direction(current_pos, next_pos):
 
 def calculate_total_cost(path, entrance, exit_point, node_map):
     total_cost = 0
-    start_location = (entrance.row, entrance.col)
     if len(path) == 2:
         total_cost = calculate_cost(entrance, exit_point)
     elif len(path) > 1:
