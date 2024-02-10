@@ -7,7 +7,9 @@ import requests
 import time
 import heapq
 
-MAX_TIME = 2
+# Global variables
+MAX_TIME = None
+ENV = "env-2.json"
 
 
 class Node:
@@ -265,22 +267,11 @@ def get_direction(current_pos, next_pos):
         return "west"
 
 
-def calculate_total_cost(path, entrance, exit_point, node_map):
-    total_cost = 0
-    if len(path) == 2:
-        total_cost = calculate_cost(entrance, exit_point)
-    elif len(path) > 1:
-        for i in range(len(path) - 1):
-            current_node = node_map[path[i][0]][path[i][1]]
-            next_node = node_map[path[i + 1][0]][path[i + 1][1]]
-            total_cost += calculate_cost(current_node, next_node)
-    return total_cost
-
-
 def run(action_function, single_request=False):
+    global ENV
     logger = logging.getLogger(__name__)
 
-    with open("env-3.json", 'r') as fp:
+    with open(ENV, 'r') as fp:
         config = json.load(fp)
 
     logger.info(f'Running agent {config["agent"]} on environment {config["env"]}')
