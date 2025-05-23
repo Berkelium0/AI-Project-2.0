@@ -1,6 +1,6 @@
-# Repository for ws2324.2.0.a/ry68fesa-2
+# Repository for AI Project 2.0
 
-**Topic:** WS2324 Assignment 2.0.A (Warm-up): Find the Wumpus Cave
+**Assignment:** [Find the Monster Cave](https://kwarc.info/teaching/AISysProj/SS24/assignment-2.0.A.pdf)
 
 ### How to Run and Dependencies
 
